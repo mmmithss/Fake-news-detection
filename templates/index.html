@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 TruthGuard - AI News Verifier</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/styles.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/particles.js"></script>
+</head>
+<body>
+    <div id="particles-js"></div>
+    
+    <div class="container py-5">
+        <div class="glass-panel">
+            <div class="text-center mb-5">
+                <div class="prediction-globe">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="#fff">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                    </svg>
+                </div>
+                <h1 class="display-4 fw-bold mt-3">TRUTHGUARD</h1>
+                <p class="lead">AI-Powered News Authenticity Scanner</p>
+            </div>
+
+            <div class="mb-4">
+                <textarea id="newsInput" class="form-control glass-input" 
+                          placeholder="Paste news headline or article..." 
+                          rows="5"></textarea>
+                <button onclick="analyzeNews()" class="btn btn-lg btn-primary mt-3 w-100 glass-btn">
+                    🔍 Analyze Now
+                </button>
+            </div>
+
+            <div id="result" style="display: none;">
+                <div class="text-center mb-4">
+                    <h2 class="verdict-badge"></h2>
+                    <div class="confidence-meter">
+                        <div class="meter-fill"></div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="chart-container">
+                            <canvas id="probabilityChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-6">
+                        <div class="glass-panel p-3">
+                            <h4>🕵️ AI Analysis Report</h4>
+                            <div id="geminiResult">
+                                <p><strong>Expert Verdict:</strong> <span id="geminiVerdict" class="badge"></span></p>
+                                <p><strong>Confidence Level:</strong> <span id="geminiConfidence"></span></p>
+                                <p><strong>Explanation:</strong> <span id="geminiExplanation"></span></p>
+                                <p><strong>Verify At:</strong> <span id="geminiSources"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="glass-panel mt-4" onclick="toggleExplanation()">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">🔍 How We Analyze Truthfulness</h5>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div id="explanationContent" style="display: none;">
+                <div class="mt-3">
+                    <div class="ai-method">
+                        <span class="method-badge bert">BERT</span>
+                        <p class="mb-1">Analyzes language patterns & context using advanced neural networks trained on 12k+ verified statements</p>
+                    </div>
+                    <div class="ai-method mt-2">
+                        <span class="method-badge gemini">GEMINI</span>
+                        <p class="mb-1">Cross-checks facts against current knowledge and suggests reliable verification sources</p>
+                    </div>
+                    
+                    <div class="mt-3 label-grid">
+                        <div class="label-item true">True<div>Verified factual claim</div></div>
+                        <div class="label-item mostly-true">Mostly True<div>Mainly correct with minor inaccuracies</div></div>
+                        <div class="label-item half-true">Half True<div>Mix of accurate and misleading elements</div></div>
+                        <div class="label-item barely-true">Barely True<div>Contains significant inaccuracies</div></div>
+                        <div class="label-item false">False<div>Incorrect but not intentionally deceptive</div></div>
+                        <div class="label-item pants-fire">Pants Fire<div>Blatantly false/absurd claim</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleExplanation() {
+    const content = document.getElementById('explanationContent');
+    const icon = document.querySelector('.toggle-icon');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.classList.add('rotate');
+    } else {
+        content.style.display = 'none';
+        icon.classList.remove('rotate');
+    }
+}
+        let chart = null;
+        const labels = ['True', 'Mostly True', 'Half True', 'Barely True', 'Pants Fire', 'False'];
+        const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#64748b', '#8b5cf6'];
+
+        async function analyzeNews() {
+            const text = document.getElementById('newsInput').value.trim();
+            if (!text) return alert('Please enter some text');
+            
+            showLoading();
+            
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text: text})
+                });
+                
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                
+                updateUI(data);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                hideLoading();
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('probabilityChart').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Analyzing with AI models...</p>
+                </div>`;
+        }
+
+        function updateUI(data) {
+            // BERT Results
+            const bert = data.bert;
+            document.querySelector('.verdict-badge').innerHTML = `
+                ${bert.prediction} <span class="confidence">${(bert.confidence * 100).toFixed(1)}%</span>
+            `;
+            document.querySelector('.meter-fill').style.width = `${bert.confidence * 100}%`;
+
+            // Gemini Results
+            // Inside updateUI(data):
+// Handle Gemini results safely
+const gemini = data.gemini || {};
+const sources = Array.isArray(gemini.sources) ? gemini.sources : [];
+
+document.getElementById('geminiVerdict').textContent = gemini.verdict || "N/A";
+document.getElementById('geminiConfidence').textContent = gemini.confidence || "N/A";
+document.getElementById('geminiExplanation').textContent = gemini.explanation || "No analysis available";
+document.getElementById('geminiSources').textContent = sources.join(', ') || "No sources provided";
+
+// Show error if present
+if (gemini.error) {
+    alert(`Gemini Error: ${gemini.error}`);
+}
+
+            // Update Chart
+            updateChart([
+                bert.probabilities['true'],
+                bert.probabilities['mostly-true'],
+                bert.probabilities['half-true'],
+                bert.probabilities['barely-true'],
+                bert.probabilities['pants-fire'],
+                bert.probabilities['false']
+            ]);
+        }
+
+        function updateChart(data) {
+            const ctx = document.getElementById('probabilityChart').getContext('2d');
+            
+            if (chart) chart.destroy();
+            
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderWidth: 3,
+                        hoverOffset: 20
+                    }]
+                },
+                options: {
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutQuart'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                font: {
+                                    family: 'Space Grotesk',
+                                    size: 14
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const label = labels[context.dataIndex];
+                                    const value = (context.raw * 100).toFixed(1) + '%';
+                                    return `${label}: ${value}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize particles
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80 },
+                color: { value: '#ffffff' },
+                opacity: { value: 0.4 },
+                size: { value: 3 },
+                move: { 
+                    enable: true,
+                    speed: 1.5,
+                    direction: 'none',
+                    random: true
+                }
+            },
+            interactivity: {
+                events: {
+                    onhover: { enable: true, mode: 'repulse' }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
