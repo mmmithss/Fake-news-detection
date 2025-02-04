@@ -150,10 +150,20 @@
             document.querySelector('.meter-fill').style.width = `${bert.confidence * 100}%`;
 
             // Gemini Results
-            document.getElementById('geminiVerdict').textContent = data.gemini.verdict;
-            document.getElementById('geminiConfidence').textContent = data.gemini.confidence;
-            document.getElementById('geminiExplanation').textContent = data.gemini.explanation;
-            document.getElementById('geminiSources').textContent = data.gemini.sources.join(', ');
+            // Inside updateUI(data):
+// Handle Gemini results safely
+const gemini = data.gemini || {};
+const sources = Array.isArray(gemini.sources) ? gemini.sources : [];
+
+document.getElementById('geminiVerdict').textContent = gemini.verdict || "N/A";
+document.getElementById('geminiConfidence').textContent = gemini.confidence || "N/A";
+document.getElementById('geminiExplanation').textContent = gemini.explanation || "No analysis available";
+document.getElementById('geminiSources').textContent = sources.join(', ') || "No sources provided";
+
+// Show error if present
+if (gemini.error) {
+    alert(`Gemini Error: ${gemini.error}`);
+}
 
             // Update Chart
             updateChart([
