@@ -44,15 +44,36 @@ def gemini_verification(text):
         return {"error": str(e)}
 
 def parse_gemini_response(response):
-    lines = [line.strip() for line in response.split('\n') if line.strip()]
-    sources = lines[3].split(": ")[1] if len(lines) > 3 else ""
-    sources_list = [s.strip() for s in sources.split(",")] if sources else []
-    return {
-        "verdict": lines[0].split(": ")[1],
-        "confidence": lines[1].split(": ")[1],
-        "explanation": ": ".join(lines[2].split(": ")[1:]),
-        "sources": sources_list
+    # Always return a consistent structure, even for errors
+    default_response = {
+        "verdict": "Unverified",
+        "confidence": "Low",
+        "explanation": "Analysis unavailable",
+        "sources": []
     }
+
+    try:
+        lines = [line.strip() for line in response.split('\n') if line.strip()]
+        
+        # Initialize with defaults
+        result = default_response.copy()
+        
+        for line in lines:
+            if line.startswith("Verdict:"):
+                result["verdict"] = line.split(": ")[1] if len(line.split(": ")) > 1 else "Unverified"
+            elif line.startswith("Confidence:"):
+                result["confidence"] = line.split(": ")[1] if len(line.split(": ")) > 1 else "Low"
+            elif line.startswith("Explanation:"):
+                result["explanation"] = ": ".join(line.split(": ")[1:]) if ": " in line else "No explanation"
+            elif line.startswith("Sources:"):
+                sources = line.split(": ")[1] if len(line.split(": ")) > 1 else ""
+                result["sources"] = [s.strip() for s in sources.split(",")] if sources else []
+
+        return result
+
+    except Exception as e:
+        return {**default_response, "error": str(e)}
+    
 
 
 @app.route('/')
